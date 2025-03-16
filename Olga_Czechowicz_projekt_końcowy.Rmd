@@ -1,0 +1,289 @@
+---
+title: "Projekt końcowy"
+author: "Olga Czechowicz"
+date: "2025-02-08"
+output: pdf_document
+---
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(warning = F, message = F)
+```
+
+# Źródło danych
+
+Dane, które zostały poddane analizie w niniejszym projekcie, pochodzą z badania z serii badań eksperymentalnych, które przeprowadziłam na rzecz mojej pracy magisterskiej (plik załączony jako „Olga_Czechowicz_projekt_dane.sav"). Badanie odnosiło się do tematyki wpływu płci na relację międzygrupową grup politycznych (wyróżnionych jako krańce kontinuum od orientacji lewicowej do prawicowej). Analiza wpływu płci na relację miedzgrupoweą grup politycznych w tym kontekście dotyczyła eksploracji (oraz próby zaobserwowania) możliwego fenomenu większego przyzwolenia na mowę nienawiści wobec kobiet należących do politycznej grupy obcej, w porównaniu do grupy własnej, przez mężczyzn (Barnes i in., 2018). 
+
+Opisany fenomen jest możliwie przykładem reakcji „backlash" wywodzącej się z teorii seksizmu wrogiego (Glick i Fiske, 1997), tj. silnego sprzeciwu oraz agresywnych zachowań wobec kobiet, które są postrzegane jako łamiące normy kobiecości, np. silnej moralności. Niemoralność w kontekście grup politycznych jest związana z tym, iż orientacja polityczna jest traktowana jako wyznacznik moralności. Osoby z politycznej grupy własnej są postrzegane jako moralne, natomiast osoby należące do grupy obcej jako niemoralne z powodu ich odmiennych opinii politycznych (Pacilli i in., 2016). 
+
+Ze względu na to, iż niniejsza praca miała skupić się przeważnie na analizie uzyskanych danych, zamieściłam więcej informacji na temat badania w załączonym pliku „O. Czechowicz - rozszerzony opis badania", dla osób pragnących uzyskać więcej kontekstu o podłożu teoretycznym badania, metodzie oraz użytych materiałach. 
+
+W przeprowadzonym badaniu, 275 mężczyzn zostało przydzielonych do jednego z dwóch warunków, gdzie zaprezentowano opis fikcyjnej kobiety polityk, po czym ukazano pięć komentarzy rodzaju mowy nienawiści na temat ukazanej kobiety. Każdy z komentarzy był oceniany przez badanych pod względem dwóch wymiarów (opisane w dalszej sekcji), które mierzyły stopień przyzwolenia na mowę nienawiści w dwóch aspektach. 
+
+W badaniu występują następujące zmienne:
+
+a) warunek_eks - manipulacja prezentowanego opisu fikcyjnej polityk (o orientacji lewicowej lub prawicowej),
+
+b) POLIT - poglądy polityczne badanego (od 1 = „lewicowe" do 7 = „prawicowe"),
+
+c) DV1_1:DV1_5 - ocena każdego komentarza pod względem wymiaru pierwszego, tj. pytania „*Czy wypowiedzi takie jak ta powinny być zabronione na portalach internetowych/w mediach ogólnopolskich?*" - im mniejsza wartość, tym większe przyzwolenie na mowę nienawiści pod względem tego wymiaru. 
+
+d) DV2_1:DV2_5 - ocena każdego komentarza pod względem wymiaru drugiego, tj. pytania „*Czy uważa Pan, że wypowiedź jest moralnie uzasadniona?*" - im większa wartość, tym większe przyzwolenie na mowę nienawiści pod względem tego wymiaru. 
+
+Badanie zostało zaprojektowane z myślą przeprowadzenia dwuczynnikowej analizy wariancji w planie 2 (warunek - orientacja polityk: lewicowa, prawicowa) x 2 (orientacja polityczna badanego: lewicowa, prawicowa), gdzie zmiennymi zależnymi są wartości obu wymiarów przyzwolenia na mowę nienawiści.
+Planowana analiza opiera się zatem na przeprowadzeniu opisanej dwuczynnikowej analizy wariancji w celu porównania średniej wartości obu wymiarów pod względem obu zmiennych niezależnych, tj. warunku oraz własnej orientacji politycznej. 
+
+Głównym zainteresowaniem ninejszej analizy są porównania różnic pomiędzy grupami politycznymi pod względem warunków, w celu zaobserwowania czy badani wykazywali większe przyzwolenie na mowę nienawiści wobec kobiet z politycznej grupy obcej w porównaniu do kobiety grupy własnej. 
+
+# Przygotowanie pliku do pracy w R
+
+Rozpoczynam pracę od uruchomienia potrzebnych bibliotek oraz ustalenia poprawnego środowiska roboczego. 
+
+```{r biblioteki}
+
+library(haven) 
+library(tidyverse)
+library(emmeans)
+library(knitr)
+library(kableExtra)
+library(jtools)
+
+```
+
+```{r środowisko robocze, eval = FALSE}
+
+setwd("/Users/Gabbz/Desktop")
+
+```
+
+Następnie wgrywam potrzebny plik do środowiska lokalnego. 
+
+```{r wgranie pliku}
+
+dane <- read_sav("Olga_Czechowicz_projekt_dane.sav")
+
+```
+
+Wykonuję szybki wgląd w strukturę danych (ze względu na ilość wierszy w pliku pdf nie zawieram pełnego outputu dla struktury danych, jest on dostępny w pliku RMarkdown). 
+
+```{r struktura danych, eval = FALSE}
+
+str(dane)
+
+```
+
+```{r pierwsze wiersze}
+
+head(dane)
+
+```
+
+Dzięki dokonanemu wglądzie w strukturę danych widzę, że uzyskany dataframe potrzebuje kilka przekształceń, aby analiza mogła zostać przeprowadzona:
+
+a) Należy zmienić etykiety dla zmiennej warunek_eks dla jasności wizualnej czytelnika. 
+
+b) Obliczyć zmienne rodzaju indeks, tj. wymiar_1 oraz wymiar_2, poprzez uśrednienie itemów oceniających każdy komentarz pod względem obu wymiarów (wymiar pierwszy został zmierzony za pomocą uśrednienienia zmiennych od DV1_1 do DV1_5, wymiar drugi za pomocą uśrednienia zmiennych od DV2_1 do DV2_5).
+
+c) Stworzenie zmiennej POL_GR, wyróżniającej dwie grupy reprezentujące osoby o orientacji lewicowej  oraz prawicowej, dla umożliwienia przeprowadzenia dwuczynnikowej analizy wariancji. 
+
+```{r obróbka dataframe}
+
+dane <- dane %>% mutate(WARUNEK = fct_recode(as_factor(dane$warunek_eks),
+                      "warunek lewicowy" = "WARUNEK A - lewica",
+                      "warunek prawicowy" = "WARUNEK B - prawica"),
+# a) Powyżej wpierw zmieniam zmienną WARUNEK na zmienną rodzaju factor,
+# następnie zmieniam etykiety dla większej klarowności.
+# b) Poniżej tworzę nowe zmienne reprezentujące dwa wymiary mowy nienawiści, 
+# poprzez obliczenie średniej dla itemów ich reprezentujących.
+           wymiar_1 = rowMeans(across(ends_with("_1")), na.rm = TRUE),
+           wymiar_2 = rowMeans(across(ends_with("_2")), na.rm = TRUE),
+# c) Poniżej tworzę zmienną POL_GR za pomocą użycia warunku if-else,
+# w którym osoby neutralne (POLIT = 4) nie są brane pod uwagę,
+# natomiast krańce wartości POLIT są podzielone jako odpowiednio lewicowe (1-3) lub prawicowe (4-7).
+           POL_GR = ifelse(POLIT >= 1 & POLIT <= 3, "M - lewica", 
+                            ifelse(POLIT >= 4 & POLIT <= 7, "M - prawica", NA)))
+
+```
+
+# Analiza danych
+
+Po przeobrażeniu struktury danych, jestem w stanie przeprowadzić analizę danych. Wpierw wykonuję szybki wgląd w strukturę dwóch wymiarów przyzwolenia na mowę nienawiści (zmienne zależne), pomiędzy wszystkimi możliwymi grupami w badaniu. 
+
+## Statystyki opisowe oraz rozkłady zmiennych
+
+Analizę zaczynam od krótkiej wizualizacji rozkładu zmiennych zależnych dla każdej z czterech wyróżnionych grup, tj. na bazie 2 (warunek) x 2 (orientacja polityczna badanego) czynników w badaniu, w celu zdobycia wstępnych informacji o zebranych danych.
+
+```{r rozkłady zmiennych zależnych, fig.width = 8, fig.height = 4}
+
+# Wymiar 1 
+ggplot(dane, aes(x = wymiar_1)) +
+  geom_histogram(binwidth = 1, fill = "lightblue") +
+  facet_grid(WARUNEK ~ POL_GR) +
+  labs(title = "Rozkład wymiaru pierwszego według warunku i orientacji politycznej badanego",
+       x = "Czy wypowiedź powinna być zabroniona?", y = "Częstotliwość") +
+  theme_minimal() +
+  theme(legend.position = "top",
+      panel.grid = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA, size = 1),
+      text = element_text(family = "serif"),
+      plot.title = element_text(face = "bold"),
+      axis.title = element_text(face = "bold"))
+
+# Wymiar 2
+ggplot(dane, aes(x = wymiar_2)) +
+  geom_histogram(binwidth = 1, fill = "lightblue") +
+  facet_grid(WARUNEK ~ POL_GR) +
+  labs(title = "Rozkład wymiaru drugiego według warunku i orientacji politycznej badanego",
+       x = "Czy wypowiedź jest moralnie uzasadniona?", y = "Częstotliwość") +
+  theme_minimal() +
+  theme(legend.position = "top",
+      panel.grid = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA, size = 1),
+      text = element_text(family = "serif"),
+      plot.title = element_text(face = "bold"),
+      axis.title = element_text(face = "bold"))
+
+```
+W ramach wymiaru pierwszego, mężczyźni lewicowi posiadali podobny rozkład wartości, tj. lewoskośny, dla obu warunków, co oznacza, iż niezależnie od warunku, byli częściej skłonni do stwierdzenia, że komentarz powinien być zabroniony. Natomiast, mężczyźni prawicowi dla obu warunków mieli rozkład bardziej zbliżony do normalnego, sugerując znacznie większą wariancję w ich odpowiedziach w porównaniu do mężczyzn lewicowych. 
+
+W ramach wymiaru drugiego, mężczyźni lewicowi oraz prawicowi dla obu warunków wykazali się rozkładami zbliżonymi do prawoskośnego, sugerując częstszą tendencję do stwierdzenia, że komentarz nie jest moralnie uzasadniony. Jednakże, rozkłady dla mężczyzn prawicowych niezależnie od warunku były mniej skośne, sugerując większą wariancję w ich odpowiedziach w porówaniu do mężczyzn lewicowych.    
+
+Następnie, generuję średnie wartości zmiennych zależnych dla każdej z grup, dla wstępnego oszacowania różnic, których istotność zostanie dopiero potwierdzona za pomocą testu dwuczynnikowej analizy wariancji w następnej sekcji raportu.
+
+```{r średnie}
+
+średnie <- dane %>% # Obliczam średnie, po zgrupowaniu danych na bazie dwóch czynników manipulowanych.
+    group_by(WARUNEK, POL_GR) %>%
+    summarise(średnia_wymiar1 = round(mean(wymiar_1), 2), średnia_wymiar2 = round(mean(wymiar_2), 2))
+
+# Następnie tworzę tabelkę za pomocą biblioteki kable(), dla większej wygody w zapoznowaniu się z treścią tabelki.
+kable(średnie, caption = "Średnie wymiaru 1 oraz wymiaru 2 dla grup pod względem warunku oraz orientacji politycznej") %>%
+      kable_styling(full_width = FALSE, bootstrap_options = c("condensed")) %>% row_spec(0, bold = TRUE) 
+
+```
+
+Na bazie wizualnej oceny, możliwa do zaobserwowania jest różnica między grupami. W obrebię warunku kobiety lewicowej, mężczyźni prawicowi byli mniej skłonni do uznania, że wypowiedź powinna być zabroniona, oraz bardziej, że wypowiedź jest moralnie uzasadniona w porównaniu do mężczyzn lewicowych. Natomiast pod względem warunku prawicowego, zaskakująco mężczyźni prawicowi również byli mniej skłonni od od mężczyzn lewicowych do uznania, iż wypowiedź powinna być zabroniona. Ponadto, w ramach warunku kobiety lewicowej, badani nie różnili się znacząco w stwierdzeniu czy wypowiedź jest moralnie uzasadniona pod względem orientacji politycznej. 
+
+Jednakże, aby faktycznie stwierdzić czy zaobserwowane różnice są istotne, następnie przeprowadzam dwuczynnikową analizę wariancji 2 (warunek: polityk lewicowa, polityk prawicowa) x 2 (orientacja polityczna badanego: lewicowa, prawicowa) dla obu wymiarów. Obie zmienne zależne zostały poddane określonej dwuczynnikowej analizie wariancji, po czym dokonano porównań parami za pomocą testu post-hoc z poprawką Bonferroniego, aby określić istotne kontrasty pomiędzy każdą z wyróżnionych grup. Ponadto, stworzyłam wizualizację dla obu analiz w formie wykresów pudełkowych.
+
+Ze względu na to, iż forma analizy oraz jej wizualizacji jest identyczna dla obu zmiennych zależnych, komentarze dołączam jedynie dla opisu analizy wymiaru pierwszego. 
+
+## Wymiar 1 - Czy wypowiedź powinna być zabroniona?
+
+```{r wymiar 1 model}
+
+# Najpierw przeprowadzam dwuczynnikową analizę wariancji za pomocą lm().  
+wymiar1_m <- lm(wymiar_1 ~ WARUNEK * POL_GR, data = dane)
+summ(wymiar1_m)
+
+# Następnie dokonuję porównań między wszystkimi możliwymi grupami pod względem warunku i grupy politycznej. 
+# Zapisuję oszacowane średnie, następnie dokonuję porównań parami 
+# w formie testu post-hoc za pomocą pairs() z poprawką Bonferroniego.
+emm_results1 <- emmeans(wymiar1_m, ~ WARUNEK * POL_GR)
+porównania_df1 <- as.data.frame(pairs(emm_results1, adjust = "bonferroni"))
+
+# Następnie wyodrębniam jedynie porównania z istotnym kontrastem - w celu większej klarowności outputu.  
+porównania_istotne1 <- porównania_df1[porównania_df1$p.value < 0.05, ]
+
+# Dodatkowo przekształcam strukturę dataframe istotnych porównań dla większej klarowności w czytaniu tabeli. 
+porównania_istotne1 <- porównania_istotne1 %>%
+    mutate(estimate = round(estimate, 3),
+      SE = round(SE, 3), df = round(df, 1),
+      t.ratio = round(t.ratio, 3), p.value = round(p.value, 4)) 
+
+# Końcowo, tworzę tabelkę zawierającą istotne porównania i ich statystyki,
+# za pomocą kable(), aby zadbać o estetykę i wizualną klarowność tabeli. 
+kable(porównania_istotne1, 
+      caption = "Istotne(p < 0.05) porównania parami z poprawką Bonferroniego") %>%
+      kable_styling(full_width = FALSE, bootstrap_options = c("condensed")) %>%
+  row_spec(0, bold = TRUE) 
+
+```
+
+Wyniki wykazują, iż mężczyźni prawicowi byli mniej skłonni do stwierdzenia, że wypowiedź powinna być zabroniona na polskich portalach społecznościowych niż mężczyźni lewicowi, niezalażnie od warunku. W obrębie warunków, zaobserwowano jedynie jeden istotny kontrast. W ramach warunku kobiety lewicowej, mężczyźni prawicowi (*M* = 5.48) byli mniej skłonni do stwierdzenia, że wypowiedź powinna być zabroniona niż mężczyźni lewicowi (*M*= 7.23), *t*(271) = 4.06, *p* < .001. 
+
+Poniżej znajduje się wizualizacja opisanych wyników. 
+
+```{r wymiar 1 wykres, fig.width = 7, fig.height = 4}
+
+emmdf_1 <- as.data.frame(emm_results1)
+
+ggplot(emmdf_1, aes(x = WARUNEK, y = emmean, fill = POL_GR)) + 
+    geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.6) + 
+    geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), 
+                  width = 0.3, position = position_dodge(width = 0.8)) + 
+    scale_fill_viridis_d(option = "cividis", 
+                        labels = c("M - lewica" = "Lewicowa", "M - prawica" = "Prawicowa")) +
+    labs(title = "Ocena pierwszego wymiaru mowy nienawiści",
+      subtitle = "a warunek oraz oraz orientacja polityczna badanego",
+      x = "Warunek", y = "Czy wypowiedź powinna być zabroniona?", 
+      fill = "Orientacja polityczna badanego") + 
+    scale_x_discrete(labels = c(
+    "warunek lewicowy" = "Orientacja lewicowa",
+    "warunek prawicowy" = "Orientacja prawicowa")) + 
+    theme_minimal() +
+    theme(legend.position = "top",
+      panel.grid = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA, size = 1),
+      text = element_text(family = "serif"),
+      plot.title = element_text(face = "bold"),
+      plot.subtitle = element_text(face = "bold"),
+      axis.title = element_text(face = "bold"))
+```
+
+## Wymiar 2 - Czy wypowiedź jest moralnie uzasadniona?
+
+```{r wymiar 2 model, warning = FALSE}
+wymiar2_m <- lm(wymiar_2 ~ WARUNEK * POL_GR, data = dane)
+summ(wymiar2_m)
+
+emm_results2 <- emmeans(wymiar2_m, ~ WARUNEK * POL_GR)
+porównania_df2 <- as.data.frame(pairs(emm_results2, adjust = "bonferroni"))
+porównania_istotne2 <- porównania_df2[porównania_df2$p.value < 0.05, ]
+
+porównania_istotne2 <- porównania_istotne2 %>%
+    mutate(estimate = round(estimate, 3),
+      SE = round(SE, 3), df = round(df, 1),
+      t.ratio = round(t.ratio, 3),p.value = round(p.value, 4)) 
+
+kable(porównania_istotne2, 
+      caption = "Istotne (p < 0.05) porównania parami z poprawką Bonferroniego") %>%
+      kable_styling(full_width = FALSE, bootstrap_options = c("condensed")) %>%
+  row_spec(0, bold = TRUE)
+
+```
+Wyniki wykazują, iż zaobserwowano, że ogólnie badani byli bardziej skłonni do stwierdzenia, że wypowiedź jest moralnie uzasadniona pod względem warunku kobiety prawicowej w porównaniu do kobiety lewicowej. Ponadto, mężczyźni prawicowi byli bardziej skłonni do stwierdzenia, że wypowiedź jest moralnie uzasadniona niż mężczyźni lewicowi niezalażnie od warunku. 
+W obrębie warunków, zaobserwowano jedynie jeden istotny kontrast. W ramach warunku kobiety lewicowej, mężczyźni prawicowi (*M* = 4.25) byli bardziej skłonni do stwierdzenia, że wypowiedź jest moralnie uzasadniona niż mężczyźni lewicowi (*M* = 2.48), *t*(271) = -5.01, *p* < .001. 
+
+Poniżej znajduje się wizualizacja opisanych wyników. 
+
+```{r, wymiar 2 wykres, fig.width = 7, fig.height = 4}
+
+emmdf_2 <- as.data.frame(emm_results2)
+
+ggplot(emmdf_2, aes(x = WARUNEK, y = emmean, fill = POL_GR)) + 
+    geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.6) + 
+    geom_errorbar(aes(ymin = emmean - SE, ymax = emmean + SE), 
+                  width = 0.3, position = position_dodge(width = 0.8)) + 
+    scale_fill_viridis_d(option = "cividis", labels = c("M - lewica" = "Lewicowa", "M - prawica" = "Prawicowa")) +
+    labs(title = "Ocena drugiego wymiaru mowy nienawiści",
+        subtitle = "a warunek oraz orientacja polityczna badanego",
+        x = "Warunek", y = "Czy wypowiedź jest moralnie uzasadniona?", 
+        fill = "Orientacja polityczna badanego") + 
+  scale_x_discrete(labels = c("warunek lewicowy" = "Orientacja lewicowa", "warunek prawicowy" = "Orientacja prawicowa")) + 
+  theme_minimal() +
+  theme(legend.position = "top",
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        text = element_text(family = "serif"),
+        plot.title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "bold"),
+        axis.title = element_text(face = "bold"))
+```
+Wzorce dostrzeżone w wynikach badania, po części odzwierciedliły opisywany we wstępie fenomen większego przyzwolenia mowy nienawiści dla kobiet z politycznej grupy obcej przez mężczyzn. Pod względem obu wymiarów, zaobserwowano, że jedynie mężczyźni prawicowi wykazywali większe przyzwolenie na mowę nienawiści wobec kobiet w warunku lewicowym niż mężczyźni lewicowi. Jednakże, mężczyźni prawicowi nie różnili się pod względem przyzwolenie mowy nienawiści pomiędzy warunkami. Niemożliwym jest zatem stwierdzenie na bazie wyników badania, iż posiadają większy stopień przyzwolenie mowy nienawiści dla kobiet z politycznej grupy obcej w porównaniu do własnej. Również nie zaobserwowano tego wzorca dla mężczyzn lewicowych. 
+
+# Bibliografia
+Barnes, T. D., Beaulieu, E., Saxton, G. W. (2018). Sex and corruption: How sexism shapes voters’ responses to scandal. Politics, Groups, and Identities.
+
+Glick, P., Fiske, S. T. (1997). Hostile and benevolent sexism: Measuring ambivalent sexist attitudes toward women. Psychology of Women Quarterly, 21(1), 119–135. https://doi.org/10.1111/j.1471-6402.1997.tb00104.x 
+
+Pacilli, M. G., Roccato, M., Pagliaro, S., Russo, S. (2016). From political opponents to enemies? The role of perceived moral distance in the animalistic dehumanization of the political outgroup. Group Processes & Intergroup Relations, 19(3), 360–373. https://doi.org/10.1177/1368430215590490
